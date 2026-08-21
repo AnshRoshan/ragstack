@@ -45,7 +45,7 @@ class CrossEncoderReranker(Reranker):
         self._ensure()
         pairs = [[query, getattr(it, text_key)[:4000]] for it in items]
         scores = self._model.predict(pairs, show_progress_bar=False)
-        ranked = sorted(zip(items, scores), key=lambda x: float(x[1]), reverse=True)
+        ranked = sorted(zip(items, scores, strict=True), key=lambda x: float(x[1]), reverse=True)
         return [it for it, _ in ranked]
 
 

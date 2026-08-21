@@ -96,8 +96,8 @@ class LexicalStore:
         if kind:
             try:
                 parsed = index.parse_query(f"kind:{kind} AND ({q})", ["title", "body", "kind"])
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("kind filter fell back to unfiltered query (%s)", e)
         hits = searcher.search(parsed, top_k).hits
         out: list[dict[str, Any]] = []
         for score, addr in hits:
@@ -135,7 +135,8 @@ class LexicalStore:
                     "source": doc["source"][0] if doc.get("source") else "",
                     "score": 0.0,
                 }
-            except Exception:
+            except Exception as e:
+                log.debug("get_by_ids missed %s (%s)", cid, e)
                 continue
         return [found[i] for i in ids if i in found]
 

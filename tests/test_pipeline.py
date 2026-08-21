@@ -68,7 +68,6 @@ class TestIngestionE2E:
 
         # old chunks must be gone (no duplicates)
         vector = VectorStore(root)
-        ids = [r["id"] for r in []]
         assert vector.count() == again.chunks
 
     def test_force_reindex(self, tmp_path):

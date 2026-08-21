@@ -55,7 +55,7 @@ class Enricher:
             with ThreadPoolExecutor(max_workers=self.workers) as pool:
                 results = list(pool.map(run, todo))
             new_rows = []
-            for (idx, key), value in zip(todo, results):
+            for (_idx, key), value in zip(todo, results, strict=True):
                 if value:
                     self._cache[key] = value
                     new_rows.append({"k": key, "v": value})
@@ -65,7 +65,7 @@ class Enricher:
                     for row in new_rows:
                         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-        for c, key in zip(chunks, keys):
+        for c, key in zip(chunks, keys, strict=True):
             ctx = self._cache.get(key)
             if ctx:
                 c.context = f"{c.context} {ctx}".strip()

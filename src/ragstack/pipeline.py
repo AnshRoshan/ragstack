@@ -164,7 +164,7 @@ class IngestionPipeline:
                         workers=self.cfg.graph.workers,
                         model_name=f"{self.llm.name}:{getattr(self.llm, 'model', '?')}",
                     )
-                    for chunk, ext in zip(chunks, extractions):
+                    for chunk, ext in zip(chunks, extractions, strict=True):
                         if ext.entities or ext.relationships:
                             self.graph.upsert_extraction(ext, chunk.id, doc.id)
                             stats.entities += len(ext.entities)

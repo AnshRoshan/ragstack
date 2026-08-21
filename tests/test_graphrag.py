@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from conftest import FakeEmbeddings, FakeLLM
+from conftest import FakeLLM
 
 from ragstack.graphrag.communities import build_communities
 from ragstack.graphrag.extract import _normalize, _parse_json_loose, extract_chunks
@@ -108,7 +108,6 @@ class TestGraphSearch:
         )
         store.upsert_extraction(ext, "chunk-1", "doc-1")
 
-        emb = FakeEmbeddings()
         vector = VectorStore(tmp_path / "vec")
         import numpy as np
 

@@ -84,8 +84,8 @@ class TestCrawlerExtract:
         title, text, links = _extract(html, "https://example.com/post")
         assert title == "Test Page"
         assert "main content" in text
-        assert any(l.endswith("/about") for l in links)
-        assert any("external.com" in l for l in links)
+        assert any(link.endswith("/about") for link in links)
+        assert any("external.com" in link for link in links)
 
 
 class TestEvalHarness:

@@ -95,7 +95,7 @@ def chunk_document(doc: Document, cfg: ChunkingConfig) -> list[Chunk]:
         body = body.strip()
         if not body:
             return
-        prefix = f"[{doc.title} › {heading}]\n" if heading else f"[{doc.title}]\n"
+        prefix = f"[{doc.title} > {heading}]\n" if heading else f"[{doc.title}]\n"
         chunks.append(
             Chunk(
                 id="",

@@ -75,7 +75,7 @@ class VectorStore:
             return
         table = self._ensure_table(int(vectors.shape[1]))
         payload = []
-        for row, vec in zip(rows, vectors):
+        for row, vec in zip(rows, vectors, strict=True):
             payload.append({**row, "vector": np.asarray(vec, dtype=np.float32)})
         table.add(payload)
 

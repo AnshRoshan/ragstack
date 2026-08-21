@@ -315,7 +315,7 @@ class RAGStack:
 
         context_blocks = [
             f"[{ref}] {it.title} ({it.source})\n{it.text[:2500]}"
-            for ref, it in zip(refs, items)
+            for ref, it in zip(refs, items, strict=True)
         ] + extra_context
         context_text = "\n\n".join(context_blocks) if context_blocks else "(nothing retrieved)"
 
@@ -373,7 +373,6 @@ class RAGStack:
             "version": _package_version(),
             "mode": self.cfg.mode,
             "modes": [m["id"] for m in MODE_CATALOG],
-            "embedding": {"provider": self.cfg.embedding.provider, "model": self.cfg.embedding.model},
             "embedding": {"provider": self.cfg.embedding.provider, "model": self.cfg.embedding.model},
             "llm": {"provider": self.cfg.llm.provider, "model": self.cfg.llm.model},
             "rerank": {"provider": self.cfg.rerank.provider},

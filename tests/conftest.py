@@ -30,7 +30,7 @@ class FakeEmbeddings(EmbeddingProvider):
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
         for i, text in enumerate(texts):
             for word in re.findall(r"\w+", text.lower()):
-                h = int(hashlib.sha1(word.encode()).hexdigest(), 16)
+                h = int(hashlib.sha1(word.encode()).hexdigest(), 16)  # noqa: S324
                 out[i, h % self.dim] += 1.0
             norm = np.linalg.norm(out[i])
             if norm > 0:

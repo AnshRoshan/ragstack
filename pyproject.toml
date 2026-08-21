@@ -87,16 +87,14 @@ select = ["E", "F", "W", "I", "B", "S", "RUF", "BLE"]
 ignore = [
     "B008",  # typer.Option()/Argument() in defaults is the framework's documented pattern
     "BLE001", # broad catches are intentional: LLM/store ops degrade gracefully by design
+    "E501",  # long lines are almost entirely string content: LLM prompts, tool schemas, fixtures
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
-# long lines are LLM prompt/schema content, not code
-"src/ragstack/agent/prompts.py" = ["E501"]
-"src/ragstack/agent/tools.py" = ["E501"]
-"src/ragstack/agent/planner.py" = ["E501"]
-"src/ragstack/graphrag/extract.py" = ["E501"]
 "src/ragstack/config.py" = ["S105"]  # password_env is an env-var NAME, not a secret
+"src/ragstack/stores/graph/sqlite_graph.py" = ["S608"]  # f-string parts are our own table/column names; values always bound via ?
+"src/ragstack/stores/sql_catalog.py" = ["B019"]  # lru_cache is the intentional per-name engine singleton
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

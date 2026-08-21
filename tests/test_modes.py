@@ -64,7 +64,7 @@ class TestDirectPipelines:
 
     def test_graph_mode_empty_index_still_answers(self, tmp_path):
         svc = _svc(tmp_path)  # graph disabled during ingest -> empty graph
-        answer = svc.query("anything", mode="graph")
+        svc.query("anything", mode="graph")
         # no entities -> no items; LLM still asked with "(nothing retrieved)"
         assert len(svc._llm.calls) == 1
 

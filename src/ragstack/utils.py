@@ -26,7 +26,8 @@ def get_logger(name: str = "ragstack") -> logging.Logger:
 
 
 def sha1(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()
+    # fingerprint only (dedup/ids), never security-sensitive
+    return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()  # noqa: S324
 
 
 def new_doc_id(source: str) -> str:
@@ -82,8 +83,8 @@ def read_text_safe(path: Path) -> str:
         best = result.best()
         if best is not None:
             return str(best)
-    except Exception:
-        pass
+    except Exception as e:
+        get_logger("ragstack.utils").debug("charset detection failed for %s (%s)", path, e)
     return path.read_text(encoding="utf-8", errors="replace")
 
 
