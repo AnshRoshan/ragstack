@@ -1,0 +1,102 @@
+[project]
+name = "ragstack"
+dynamic = ["version"]
+description = "Hybrid Agentic RAG: vectorless lexical index + vector RAG + GraphRAG + text-to-SQL under one tool-calling agent"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Ansh Roshan", email = "ianshroshan@gmail.com" }
+]
+keywords = [
+    "rag", "retrieval-augmented-generation", "llm", "embeddings",
+    "vector-search", "knowledge-graph", "graphrag", "hybrid-search",
+    "agentic-ai", "bm25", "text-to-sql",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Indexing",
+]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "pydantic>=2.7",
+    "PyYAML>=6.0",
+    "httpx>=0.27",
+    "openai>=1.40",
+    "anthropic>=0.34",
+    "lancedb>=0.9",
+    "tantivy>=0.26",
+    "pyarrow>=17.0",
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+    "SQLAlchemy>=2.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+    "trafilatura>=1.12",
+    "networkx>=3.3",
+    "charset-normalizer>=3.3",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "docling>=2.5",
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+neo4j = ["neo4j>=5.20"]
+dev = ["pytest>=8.2", "ruff>=0.5", "mypy>=1.10"]
+all = ["neo4j>=5.20"]
+
+[project.urls]
+Homepage = "https://github.com/AnshRoshan/ragstack"
+Repository = "https://github.com/AnshRoshan/ragstack"
+Issues = "https://github.com/AnshRoshan/ragstack/issues"
+Documentation = "https://github.com/AnshRoshan/ragstack/blob/main/docs/ARCHITECTURE.md"
+
+[project.scripts]
+ragstack = "ragstack.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/ragstack/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ragstack"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "tests/", "docs/", "examples/", "README.md", "LICENSE", "config.example.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "S", "RUF", "BLE"]
+ignore = [
+    "B008",  # typer.Option()/Argument() in defaults is the framework's documented pattern
+    "BLE001", # broad catches are intentional: LLM/store ops degrade gracefully by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+# long lines are LLM prompt/schema content, not code
+"src/ragstack/agent/prompts.py" = ["E501"]
+"src/ragstack/agent/tools.py" = ["E501"]
+"src/ragstack/agent/planner.py" = ["E501"]
+"src/ragstack/graphrag/extract.py" = ["E501"]
+"src/ragstack/config.py" = ["S105"]  # password_env is an env-var NAME, not a secret
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

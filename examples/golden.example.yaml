@@ -1,0 +1,13 @@
+# Golden-set evaluation file for `ragstack eval`
+# expected_docs: substrings matched against source path/title of retrieved items
+# expected_keywords: all must appear somewhere in the top-k retrieved text
+# judge: true -> additionally LLM-scores answer faithfulness 0-5 (needs a working LLM)
+cases:
+  - question: "What is RAGStack?"
+    expected_docs: ["readme"]
+    expected_keywords: ["rag"]
+    judge: false
+  - question: "How does hybrid retrieval fuse results?"
+    expected_docs: ["fusion", "retrieval"]
+    expected_keywords: ["reciprocal"]
+    judge: false

@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# RAGStack local indexes / caches
+.ragstack/
+ragstack.yaml
+examples/output/
+
+# Model + data artifacts
+*.lance
+*.db
+artifacts/
+
+# Build artifacts (rebuild with `uv build`)
+dist/
+
+# Local editor/agent config + logs
+.claude/
+*.log
+.err.log
+.out.log

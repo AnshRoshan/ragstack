@@ -1,0 +1,64 @@
+# RAGStack configuration
+# Copy to ragstack.yaml and edit. CLI: ragstack --config ragstack.yaml <cmd>
+
+# Stack mode: local | cloud | hybrid
+#   local  -> sentence-transformers embeddings + cross-encoder rerank + Ollama LLM
+#   cloud  -> OpenAI embeddings + OpenAI/Anthropic LLM, no local models
+#   hybrid -> local embeddings/rerank, cloud LLM (best quality/cost balance)
+mode: hybrid
+
+embedding:
+  provider: auto            # auto | sentence-transformers | openai-compatible
+  model: auto               # auto -> BAAI/bge-small-en-v1.5 (local) | text-embedding-3-small (cloud)
+  base_url: null            # override for any OpenAI-compatible endpoint
+  api_key_env: OPENAI_API_KEY
+  batch_size: 64
+
+llm:
+  provider: auto            # auto | ollama | openai | anthropic | openai-compatible
+  model: auto               # auto -> llama3.1 (ollama) | gpt-4o-mini (openai) | claude-sonnet-4-... (anthropic)
+  base_url: null            # e.g. http://localhost:11434/v1 for Ollama, or vLLM/LM Studio
+  temperature: 0.2
+  max_tokens: 2048
+
+rerank:
+  provider: auto            # auto -> cross-encoder in local/hybrid, none in cloud
+  model: cross-encoder/ms-marco-MiniLM-L-6-v2
+
+chunking:
+  size: 512                 # target tokens per chunk
+  overlap: 64
+  min_size: 80
+
+graph:
+  enabled: true             # entity/relation extraction during indexing (uses the LLM)
+  backend: sqlite           # sqlite (embedded, default) | neo4j
+  uri: bolt://localhost:7687  # only used when backend == neo4j
+  user: neo4j
+  password_env: NEO4J_PASSWORD
+  community_summaries: true # Louvain clustering + LLM summaries for global search
+  max_hops: 2
+  workers: 3                # parallel LLM extraction calls
+
+agent:
+  max_steps: 8              # max tool-calling iterations per question
+  top_k: 8
+  evidence_grading: true    # CRAG-style quality gate after each retrieval tool
+  evidence_grader: heuristic # heuristic (free) | llm (one extra LLM call per retrieval)
+
+cache:
+  enabled: true             # semantic response cache for near-duplicate questions
+  threshold: 0.95           # similarity needed to serve a cached answer
+  fuzzy_threshold: 0.98     # stricter threshold when the question sounds uncertain
+
+databases: {}
+  # Named SQLAlchemy URLs exposed to the agent as text-to-SQL tools (read-only):
+  # analytics: sqlite:///D:/data/analytics.db
+  # warehouse: postgresql+psycopg://user:pass@localhost:5432/warehouse
+
+index:
+  root: .ragstack           # where indexes/manifest/cache live
+
+server:
+  host: 127.0.0.1
+  port: 8000
