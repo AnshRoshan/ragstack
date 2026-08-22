@@ -117,6 +117,7 @@ class RAGStack:
         self._sql: SQLCatalog | None = None
         self._pipeline: IngestionPipeline | None = None
         self._cache = None
+        self._memory = None
 
     # -- lazy components -------------------------------------------------------
     @property
@@ -209,6 +210,7 @@ class RAGStack:
             top_k=top_k or self.cfg.agent.top_k,
             max_hops=self.cfg.graph.max_hops,
             max_steps=self.cfg.agent.max_steps,
+            strip_refinement=self.cfg.agent.strip_refinement,
         )
 
     @property
@@ -226,44 +228,88 @@ class RAGStack:
             )
         return self._cache
 
+    @property
+    def memory(self):
+        if self.cfg.agent.memory_turns <= 0:
+            return None
+        if self._memory is None:
+            from .memory import ConversationMemory
+
+            self._memory = ConversationMemory(self.root)
+        return self._memory
+
     def stream_query(
-        self, question: str, mode: str = "auto", top_k: int | None = None, use_cache: bool = True
+        self,
+        question: str,
+        mode: str = "auto",
+        top_k: int | None = None,
+        use_cache: bool = True,
+        session_id: str | None = None,
     ) -> Iterator[dict[str, Any]]:
         mode = (mode or "auto").lower()
         if mode not in ALL_MODES:
             yield {"type": "error", "message": f"unknown mode {mode!r}; valid: {sorted(ALL_MODES)}"}
             return
 
+        memory = self.memory
+        history = (
+            memory.history(session_id, limit=self.cfg.agent.memory_turns * 2)
+            if (memory and session_id)
+            else []
+        )
+
+        # Co-reference rewrite: turn follow-ups into standalone search queries.
+        search_query = question
+        if history:
+            from .memory import rewrite_question
+
+            search_query = rewrite_question(self.llm, question, history)
+            yield {
+                "type": "rewrite",
+                "original": question,
+                "standalone": search_query,
+            }
+
         cache = self.cache if use_cache else None
         if cache is not None:
-            hit = cache.lookup(question, mode=mode)
+            hit = cache.lookup(search_query, mode=mode)
             if hit:
                 yield {"type": "start", "mode": mode, "tools": [], "cached": True}
                 yield {"type": "done", **hit, "error": None}
+                self._remember(session_id, question, hit.get("answer", ""))
                 return
 
         final_event: dict[str, Any] | None = None
         if mode in DIRECT_MODES:
-            for event in self._stream_direct(question, mode, top_k):
+            for event in self._stream_direct(question, mode, top_k, search_query, history):
                 if event["type"] == "done":
                     final_event = event
                 yield event
         else:
             ctx = self._tool_context(top_k)
             runner = AgentRunner(self.llm, ctx)
-            for event in runner.run(question, mode=mode, stream=True):
+            for event in runner.run(
+                question, mode=mode, stream=True, history=history, search_query=search_query
+            ):
                 if event["type"] == "done":
                     final_event = event
                 yield event
 
         if cache is not None and final_event and not final_event.get("error") and final_event.get("answer"):
             cache.store(
-                question,
+                search_query,
                 mode,
                 final_event["answer"],
                 final_event.get("citations", []),
                 final_event.get("steps", []),
             )
+        self._remember(session_id, question, final_event.get("answer", "") if final_event else "")
+
+    def _remember(self, session_id: str | None, question: str, answer: str) -> None:
+        if not session_id or self.memory is None or not answer:
+            return
+        self.memory.append(session_id, "user", question)
+        self.memory.append(session_id, "assistant", answer)
 
     # -- direct single-pass pipelines ----------------------------------------
     def _retrieve_direct(self, question: str, mode: str, top_k: int):
@@ -290,13 +336,20 @@ class RAGStack:
     def _direct_reranker(self):
         return self.reranker if self.cfg.rerank.provider != "none" else None
 
-    def _stream_direct(self, question: str, mode: str, top_k: int | None) -> Iterator[dict[str, Any]]:
+    def _stream_direct(
+        self,
+        question: str,
+        mode: str,
+        top_k: int | None,
+        search_query: str | None = None,
+        history: list[dict] | None = None,
+    ) -> Iterator[dict[str, Any]]:
         from .agent.tools import ToolContext
 
         yield {"type": "start", "mode": mode, "tools": [f"{mode}_retrieval"]}
 
         try:
-            items, extra_context = self._retrieve_direct(question, mode, top_k)
+            items, extra_context = self._retrieve_direct(search_query or question, mode, top_k)
         except Exception as e:
             log.exception("direct retrieval failed")
             yield {"type": "error", "message": f"{type(e).__name__}: {e}"}
@@ -319,10 +372,15 @@ class RAGStack:
         ] + extra_context
         context_text = "\n\n".join(context_blocks) if context_blocks else "(nothing retrieved)"
 
+        history_block = ""
+        if history:
+            from .memory import format_history
+
+            history_block = f"\n\nRECENT CONVERSATION (for continuity, do not cite):\n{format_history(history)}"
         synthesis = (
             f"Answer the QUESTION using ONLY the CONTEXT. End every claim with its [Sn] citation. "
             f"If the context does not contain the answer, say exactly what is missing.\n\n"
-            f"QUESTION: {question}\n\nCONTEXT:\n{context_text}"
+            f"QUESTION: {question}{history_block}\n\nCONTEXT:\n{context_text}"
         )
         answer_parts: list[str] = []
         error: str | None = None
@@ -349,12 +407,14 @@ class RAGStack:
             "error": error,
         }
 
-    def query(self, question: str, mode: str = "auto", top_k: int | None = None) -> Answer:
+    def query(
+        self, question: str, mode: str = "auto", top_k: int | None = None, session_id: str | None = None
+    ) -> Answer:
         from .types import Answer, Citation
 
         mode = (mode or "auto").lower()
         answer_text, citations, steps = "", [], []
-        for event in self.stream_query(question, mode=mode, top_k=top_k):
+        for event in self.stream_query(question, mode=mode, top_k=top_k, session_id=session_id):
             if event["type"] == "done":
                 answer_text = event.get("answer", "")
                 citations = [Citation(**c) for c in event.get("citations", [])]
@@ -382,6 +442,7 @@ class RAGStack:
             "graph": graph_stats,
             "databases": list(self.cfg.databases.keys()),
             "cache_entries": self.cache.count() if self.cache is not None else 0,
+            "memory": self.memory.stats() if self.memory is not None else {"sessions": 0, "turns": 0},
             "root": str(self.root),
         }
 
@@ -392,6 +453,8 @@ class RAGStack:
             self._graph.clear()
         if self._cache is not None:
             self._cache.clear()
+        if self._memory is not None:
+            self._memory.clear()
         manifest = self.root / "manifest.jsonl"
         if manifest.exists():
             manifest.unlink()

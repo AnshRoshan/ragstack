@@ -64,6 +64,8 @@ class AgentConfig(BaseModel):
     top_k: int = 8
     evidence_grading: bool = True  # CRAG-style check after each retrieval tool
     evidence_grader: str = "heuristic"  # heuristic | llm
+    strip_refinement: bool = True  # keep only query-relevant sentences from graded evidence
+    memory_turns: int = 3  # conversation turns remembered per session (0 disables memory)
 
 
 class CacheConfig(BaseModel):

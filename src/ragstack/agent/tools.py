@@ -163,6 +163,7 @@ class ToolContext:
     top_k: int = 8
     max_hops: int = 2
     max_steps: int = 8
+    strip_refinement: bool = True
     citations: dict[str, Citation] = field(default_factory=dict)
     _counter: int = 0
 

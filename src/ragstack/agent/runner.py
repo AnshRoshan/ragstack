@@ -52,6 +52,16 @@ class AgentRunner:
                     ]
                     query_text = call.arguments.get("query") or call.arguments.get("question") or ""
                     verdict = self.ctx.grader.grade(query_text, items)
+                    if verdict["action"] == "correct" and self.ctx.strip_refinement:
+                        refined = self.ctx.grader.refine(query_text, items)
+                        if refined and len(refined) != len(items):
+                            by_ref = {it.chunk_id: it for it in refined}
+                            parsed = [
+                                {**entry, "text": by_ref[entry["ref"]].text}
+                                for entry in parsed
+                                if entry.get("ref") in by_ref
+                            ]
+                            observation = json.dumps(parsed, ensure_ascii=False)
                     if verdict.get("hint"):
                         observation = f"{observation}\n\n{verdict['hint']}"
             except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
@@ -59,13 +69,21 @@ class AgentRunner:
         return observation
 
     def run(
-        self, question: str, mode: str = "auto", stream: bool = True
+        self,
+        question: str,
+        mode: str = "auto",
+        stream: bool = True,
+        history: list[dict] | None = None,
+        search_query: str | None = None,
     ) -> Iterator[dict[str, Any]]:
         all_tools = tools_for_mode(mode)
-        messages: list[dict] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": question},
-        ]
+        messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for turn in history or []:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+        user_content = question
+        if search_query and search_query != question:
+            user_content = f"{question}\n\n(standalone search query: {search_query})"
+        messages.append({"role": "user", "content": user_content})
         steps: list[dict] = []
         answer_text = ""
         error: str | None = None

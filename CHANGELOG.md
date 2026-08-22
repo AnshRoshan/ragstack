@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-08-21
+
+Conversation memory with co-reference query rewriting (`--session`, `session_id`
+in the API; follow-ups like "and its pricing?" become standalone search queries);
+CRAG knowledge-strip refinement (only query-relevant sentences of graded-correct
+evidence reach the generator); `ragstack watch` live re-indexing; `ragstack bench`
+deterministic self-benchmark (index throughput, retrieval latency, hit@k/MRR);
+website redesign to an engineering-dossier system with a light/dark theme
+switcher and warm editor-light palette.
+
 ## 0.2.0 — 2026-08-21
 
 Eight first-class retrieval modes with fast direct pipelines (`vector`, `lexical`,

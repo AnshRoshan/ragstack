@@ -61,6 +61,9 @@ ragstack crawl https://example.com    # index a website (same-domain, robots-awa
 
 ragstack query "How does hybrid retrieval fuse results?"
 ragstack query "error CODE-4212 meaning" --mode lexical --no-cache
+ragstack query "and its rate limits?" --session demo   # follow-up memory: 'its' resolves
+ragstack watch ./docs                                  # re-index on change
+ragstack bench --docs 50                               # throughput/latency/recall self-benchmark
 ragstack serve                        # web console at http://127.0.0.1:8000
 ragstack modes                        # the 8-mode catalog
 ragstack status                       # what's indexed

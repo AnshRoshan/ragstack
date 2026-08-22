@@ -9,10 +9,15 @@ Two graders:
   heuristic (default, free): uses reranker scores when available, else falls back
           to an honest "ambiguous" when it cannot judge.
   llm: one cheap LLM judgment over the concatenated snippets.
+
+Also implements CRAG §4.4 knowledge-strip refinement: when a retrieval grades
+"correct", chunks are split into sentence strips and only the query-relevant
+strips are kept — fewer noise tokens reach the generator.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..providers.llm import LLMProvider
@@ -44,6 +49,16 @@ QUESTION: {question}
 CONTEXT:
 {context}"""
 
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+class _Strip:
+    """A single sentence strip carrying a pointer back to its parent item."""
+
+    def __init__(self, parent: RetrievedItem, text: str):
+        self.parent = parent
+        self.text = text
+
 
 class EvidenceGrader:
     def __init__(
@@ -69,6 +84,49 @@ class EvidenceGrader:
         if self.grader == "llm" and self.llm is not None:
             return self._grade_llm(question, items)
         return self._grade_heuristic(question, items)
+
+    def refine(self, question: str, items: list[RetrievedItem], max_strips: int = 12) -> list[RetrievedItem]:
+        """CRAG §4.4 knowledge-strip refinement. Returns items rebuilt from only
+        their query-relevant sentences; falls back to the input unchanged when
+        no cross-encoder is available."""
+        if self.reranker is None or not items:
+            return items
+        try:
+            strips: list[_Strip] = []
+            for item in items[:6]:
+                for sent in _SENTENCE_SPLIT.split(item.text):
+                    if len(sent.strip()) > 30:
+                        strips.append(_Strip(item, sent.strip()))
+            if len(strips) <= max_strips:
+                return items
+            scored = self.reranker.rerank(question, strips, text_key="text")
+            kept: dict[str, list[str]] = {}
+            order: list[str] = []
+            for strip in scored[:max_strips]:
+                key = strip.parent.chunk_id or strip.parent.source
+                if key not in kept:
+                    kept[key] = []
+                    order.append(key)
+                kept[key].append(strip.text)
+            refined: list[RetrievedItem] = []
+            for item in items:
+                key = item.chunk_id or item.source
+                if kept.get(key):
+                    refined.append(
+                        RetrievedItem(
+                            chunk_id=item.chunk_id,
+                            doc_id=item.doc_id,
+                            source=item.source,
+                            title=item.title,
+                            text=" … ".join(kept[key]),
+                            score=item.score,
+                            origin=item.origin,
+                        )
+                    )
+            return refined or items
+        except Exception as e:
+            log.debug("strip refinement skipped (%s)", e)
+            return items
 
     # -- heuristic -----------------------------------------------------------
     def _grade_heuristic(self, question: str, items: list[RetrievedItem]) -> dict[str, Any]:

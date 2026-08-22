@@ -24,6 +24,7 @@ class QueryRequest(BaseModel):
     mode: str = "auto"
     top_k: int | None = None
     use_cache: bool = True
+    session_id: str | None = Field(default=None, max_length=128)
 
 
 class IndexRequest(BaseModel):
@@ -91,7 +92,10 @@ def create_app(service: RAGStack | None = None) -> FastAPI:
     def query(req: QueryRequest) -> StreamingResponse:
         def sse():
             try:
-                for event in svc.stream_query(req.question, mode=req.mode, top_k=req.top_k, use_cache=req.use_cache):
+                for event in svc.stream_query(
+                    req.question, mode=req.mode, top_k=req.top_k,
+                    use_cache=req.use_cache, session_id=req.session_id,
+                ):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
             except Exception as e:
                 log.exception("query crashed")

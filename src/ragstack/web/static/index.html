@@ -153,6 +153,7 @@
 <script>
 const $ = s => document.querySelector(s);
 const messages = $('#messages'), srcList = $('#srcList');
+const SESSION = (crypto.randomUUID ? crypto.randomUUID() : 's-' + Date.now());
 let busy = false;
 
 /* ---------- boot: modes + status ---------- */
@@ -246,7 +247,7 @@ async function ask(question) {
   try {
     const resp = await fetch('/api/query', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({question, mode: $('#mode').value})
+      body: JSON.stringify({question, mode: $('#mode').value, session_id: SESSION})
     });
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while (true) {
@@ -261,7 +262,9 @@ async function ask(question) {
         if (payload === '[DONE]') continue;
         let ev; try { ev = JSON.parse(payload); } catch { continue; }
 
-        if (ev.type === 'tool_start') {
+        if (ev.type === 'rewrite') {
+          addStep('thought', `<b>follow-up</b> resolved as: ${esc(ev.standalone)}`);
+        } else if (ev.type === 'tool_start') {
           think.classList.remove('thinking');
           addStep('', `<b>→ ${esc(ev.name)}</b> ${esc(JSON.stringify(ev.args||{})).slice(0,140)}`);
         } else if (ev.type === 'tool_end') {
