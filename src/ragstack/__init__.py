@@ -1,4 +1,4 @@
-"""RAGStack — hybrid Agentic RAG.
+"""RAGStack â€” hybrid Agentic RAG.
 
 Vectorless lexical index + vector RAG + GraphRAG + text-to-SQL,
 unified under one tool-calling agent.
@@ -11,7 +11,7 @@ Quick start:
     answer = svc.query("What does the spec say about rate limits?")
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "AppConfig",

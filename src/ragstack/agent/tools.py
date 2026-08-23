@@ -93,6 +93,21 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "recall_memory",
+            "description": "Search past conversations with this user: earlier questions you already answered, with their answers. Use when the question might have been asked before or builds on an earlier answer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer", "default": 4},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "graph_search",
             "description": "Knowledge-graph neighborhood: entities and relations related to a topic/name, plus their source chunks. Use for multi-hop 'who/what connects to what' questions.",
             "parameters": {
@@ -158,6 +173,7 @@ class ToolContext:
     graph_store: Any = None
     llm: Any = None
     sql_catalog: Any = None
+    recall_store: Any = None
     reranker: Any = None
     grader: Any = None
     top_k: int = 8
@@ -251,6 +267,12 @@ def make_executor(ctx: ToolContext) -> Callable[[str, dict], str]:
                 context, items = global_search(ctx.graph_store, ctx.llm, args["topic"], int(args.get("top_k", 4)))
                 refs = [ctx.register(i) for i in items]
                 return f"{context}\n\nCOMMUNITY REFS: {refs}"
+
+            if name == "recall_memory":
+                if ctx.recall_store is None:
+                    return json.dumps({"error": "recall disabled"})
+                hits = ctx.recall_store.search(args["query"], int(args.get("top_k", 4)))
+                return json.dumps(hits, ensure_ascii=False)
 
             if name == "sql_query":
                 if ctx.sql_catalog is None:

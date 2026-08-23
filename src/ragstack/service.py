@@ -118,6 +118,7 @@ class RAGStack:
         self._pipeline: IngestionPipeline | None = None
         self._cache = None
         self._memory = None
+        self._recall = None
 
     # -- lazy components -------------------------------------------------------
     @property
@@ -205,6 +206,7 @@ class RAGStack:
             graph_store=self.graph,
             llm=self.llm,
             sql_catalog=self.sql if self.cfg.databases else None,
+            recall_store=self.recall,
             reranker=self.reranker if self.cfg.rerank.provider != "none" else None,
             grader=grader,
             top_k=top_k or self.cfg.agent.top_k,
@@ -237,6 +239,16 @@ class RAGStack:
 
             self._memory = ConversationMemory(self.root)
         return self._memory
+
+    @property
+    def recall(self):
+        if not self.cfg.agent.recall_enabled:
+            return None
+        if self._recall is None:
+            from .memory import RecallStore
+
+            self._recall = RecallStore(self.root, self.embeddings)
+        return self._recall
 
     def stream_query(
         self,
@@ -310,6 +322,8 @@ class RAGStack:
             return
         self.memory.append(session_id, "user", question)
         self.memory.append(session_id, "assistant", answer)
+        if self.recall is not None:
+            self.recall.add(session_id, question, answer)
 
     # -- direct single-pass pipelines ----------------------------------------
     def _retrieve_direct(self, question: str, mode: str, top_k: int):
@@ -443,6 +457,8 @@ class RAGStack:
             "databases": list(self.cfg.databases.keys()),
             "cache_entries": self.cache.count() if self.cache is not None else 0,
             "memory": self.memory.stats() if self.memory is not None else {"sessions": 0, "turns": 0},
+            "recall_entries": self.recall.count() if self.recall is not None else 0,
+            "auth": bool(self.cfg.server.auth_token),
             "root": str(self.root),
         }
 
@@ -455,6 +471,8 @@ class RAGStack:
             self._cache.clear()
         if self._memory is not None:
             self._memory.clear()
+        if self._recall is not None:
+            self._recall.clear()
         manifest = self.root / "manifest.jsonl"
         if manifest.exists():
             manifest.unlink()

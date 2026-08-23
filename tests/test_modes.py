@@ -48,7 +48,7 @@ class TestDirectPipelines:
         svc = _svc(tmp_path)
         answer = svc.query("what orchestrates containers?", mode="vector")
         assert "[S1]" in answer.text or "Synthesized" in answer.text
-        assert len(svc._llm.calls) == 1  # exactly one synthesis call — no agent loop
+        assert len(svc._llm.calls) == 1  # exactly one synthesis call â€” no agent loop
         assert answer.citations
 
     def test_lexical_mode(self, tmp_path):
@@ -101,7 +101,7 @@ class TestAgenticDispatch:
         svc._llm = FakeLLM([{"content": "Direct answer."}])
         events = list(svc.stream_query("q", mode="auto"))
         start = events[0]
-        assert start["type"] == "start" and len(start["tools"]) == 9
+        assert start["type"] == "start" and len(start["tools"]) == 10
 
 
 class TestModesEndpoint:

@@ -91,7 +91,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+"tests/*" = ["S101", "S105"]
 "src/ragstack/config.py" = ["S105"]  # password_env is an env-var NAME, not a secret
 "src/ragstack/stores/graph/sqlite_graph.py" = ["S608"]  # f-string parts are our own table/column names; values always bound via ?
 "src/ragstack/stores/sql_catalog.py" = ["B019"]  # lru_cache is the intentional per-name engine singleton

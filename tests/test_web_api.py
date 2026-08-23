@@ -80,3 +80,45 @@ class TestWebAPI:
         c = _client(tmp_path)
         r = c.post("/api/query", json={"question": ""})
         assert r.status_code == 422
+
+
+class TestAuth:
+    def _authed_client(self, tmp_path: Path):
+        from ragstack.config import AppConfig
+
+        cfg = AppConfig(mode="local")
+        cfg.index.root = str(tmp_path / "idx")
+        cfg.graph.enabled = False
+        cfg.server.auth_token = "sekrit"
+        svc = RAGStack(cfg)
+        svc._embeddings = FakeEmbeddings()
+        svc._llm = FakeLLM([{"content": "ok"}])
+        return TestClient(create_app(svc))
+
+    def test_mutating_endpoints_reject_bad_token(self, tmp_path):
+        c = self._authed_client(tmp_path)
+        r = c.post("/api/query", json={"question": "hi"}, headers={"Authorization": "Bearer wrong"})
+        assert r.status_code == 401
+        r2 = c.post("/api/index", json={"paths": ["x"]})
+        assert r2.status_code == 401
+
+    def test_correct_token_passes(self, tmp_path):
+        c = self._authed_client(tmp_path)
+        r = c.post(
+            "/api/query",
+            json={"question": "q"},
+            headers={"Authorization": "Bearer sekrit"},
+        )
+        assert r.status_code == 200
+
+    def test_nonlocal_callers_require_token(self, tmp_path):
+        # TestClient presents as host "testclient" (not loopback), so the
+        # localhost convenience bypass does not apply.
+        c = self._authed_client(tmp_path)
+        r = c.post("/api/query", json={"question": "q"})
+        assert r.status_code == 401
+
+    def test_read_only_endpoints_stay_open(self, tmp_path):
+        c = self._authed_client(tmp_path)
+        assert c.get("/api/status").status_code == 200
+        assert c.get("/api/modes").status_code == 200

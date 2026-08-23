@@ -1,0 +1,12 @@
+.git
+.venv
+.ragstack
+.claude
+dist
+tests
+docs
+examples
+website
+.github
+*.log
+docker-compose.yml

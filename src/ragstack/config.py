@@ -66,6 +66,7 @@ class AgentConfig(BaseModel):
     evidence_grader: str = "heuristic"  # heuristic | llm
     strip_refinement: bool = True  # keep only query-relevant sentences from graded evidence
     memory_turns: int = 3  # conversation turns remembered per session (0 disables memory)
+    recall_enabled: bool = True  # past Q&A becomes retrievable via the recall_memory tool
 
 
 class CacheConfig(BaseModel):
@@ -81,6 +82,7 @@ class IndexConfig(BaseModel):
 class ServerConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
+    auth_token: str | None = None  # when set, mutating endpoints require Bearer auth
 
 
 class AppConfig(BaseModel):
@@ -204,7 +206,12 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             raise ConfigError(f"invalid YAML in {path}: {e}") from e
     elif path is not None:
         raise ConfigError(f"config file not found: {path}")
-    return AppConfig(**data)
+
+    cfg = AppConfig(**data)
+    # container/CI overrides via environment
+    if os.environ.get("RAGSTACK_AUTH_TOKEN"):
+        cfg.server.auth_token = os.environ["RAGSTACK_AUTH_TOKEN"]
+    return cfg
 
 
 def save_config(cfg: AppConfig, path: str | Path) -> None:

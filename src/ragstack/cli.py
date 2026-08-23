@@ -312,6 +312,45 @@ def bench(
     console.print("[dim]self-retrieval on synthetic corpus: sanity/regression signal only[/dim]")
 
 
+@app.command("sessions")
+def sessions_list(
+    config: Optional[Path] = typer.Option(None, "--config", "-c", hidden=True),
+):
+    """List conversation sessions."""
+    svc = _service(config)
+    if svc.memory is None:
+        console.print("[dim]memory disabled[/dim]")
+        return
+    rows = svc.memory.list_sessions()
+    if not rows:
+        console.print("[dim]no sessions yet[/dim]")
+        return
+    table = Table(title="Conversation sessions")
+    table.add_column("session", style="cyan")
+    table.add_column("turns")
+    table.add_column("last activity")
+    for r in rows:
+        table.add_row(r["session"], str(r["turns"]), r["last"])
+    console.print(table)
+    if svc.recall is not None:
+        console.print(f"[dim]recall memory: {svc.recall.count()} stored Q&A pairs[/dim]")
+
+
+@app.command()
+def forget(
+    session: Optional[str] = typer.Argument(None, help="Session id to forget; omit to forget everything"),
+    config: Optional[Path] = typer.Option(None, "--config", "-c", hidden=True),
+):
+    """Delete conversation memory (and recall entries)."""
+    svc = _service(config)
+    if svc.memory is not None:
+        svc.memory.clear(session)
+    if svc.recall is not None and session is None:
+        svc.recall.clear()
+    target = session or "all sessions"
+    console.print(f"[green]forgot {target}[/green]")
+
+
 def main() -> None:
     import sys
 

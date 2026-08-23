@@ -65,6 +65,8 @@ ragstack query "and its rate limits?" --session demo   # follow-up memory: 'its'
 ragstack watch ./docs                                  # re-index on change
 ragstack bench --docs 50                               # throughput/latency/recall self-benchmark
 ragstack serve                        # web console at http://127.0.0.1:8000
+ragstack sessions                     # list conversation sessions
+ragstack forget demo                  # forget a session's memory
 ragstack modes                        # the 8-mode catalog
 ragstack status                       # what's indexed
 ragstack eval my_golden.yaml          # measure hit-rate / MRR / faithfulness
@@ -86,6 +88,20 @@ uv run pytest tests/ -q     # 65 hermetic tests (fake models, no network)
 ```
 
 Covers: chunker, parsers, crawler extraction, lexical store, vector store, graph store round-trips, entity extraction + caching, communities, graph search, agent loop (tool calls, streaming, step budget, error surfacing), tool executor + citation registry, evidence grader, query decomposition, semantic cache (hit/miss/uncertainty/mode-scoping), config resolution, enricher caching, full ingestion pipeline (index → skip unchanged → re-index on change → reset), web API (status, SSE query stream, indexing endpoint, UI serving).
+
+## Deploy with Docker
+
+```bash
+docker compose up --build          # console on http://localhost:8000
+docker compose --profile neo4j up  # + Neo4j sidecar; set graph.backend: neo4j
+```
+
+To require an access token on the API (recommended when not binding to localhost):
+
+```yaml
+server:
+  auth_token: "your-secret"        # or env RAGSTACK_AUTH_TOKEN
+```
 
 ## Project layout
 

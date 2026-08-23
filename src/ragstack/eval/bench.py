@@ -1,4 +1,4 @@
-﻿"""Deterministic synthetic corpus generator for self-benchmarking."""
+"""Deterministic synthetic corpus generator for self-benchmarking."""
 
 from __future__ import annotations
 

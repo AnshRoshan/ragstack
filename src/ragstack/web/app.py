@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,6 +54,19 @@ def create_app(service: RAGStack | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+
+    token = svc.cfg.server.auth_token
+
+    def require_auth(request: Request, authorization: str | None = Header(default=None)) -> None:
+        if not token:
+            return
+        if request.client and request.client.host in ("127.0.0.1", "::1") and not authorization:
+            return  # local callers stay frictionless unless they send a header
+        if authorization != f"Bearer {token}":
+            raise HTTPException(401, "invalid or missing bearer token")
+
+    guarded = [Depends(require_auth)] if token else []
+
     @app.get("/api/modes")
     def modes() -> list[dict[str, Any]]:
         from ..service import MODE_CATALOG
@@ -64,7 +77,7 @@ def create_app(service: RAGStack | None = None) -> FastAPI:
     def status() -> dict[str, Any]:
         return svc.status()
 
-    @app.post("/api/index")
+    @app.post("/api/index", dependencies=guarded)
     def index(req: IndexRequest) -> dict[str, Any]:
         try:
             stats = svc.ingest(
@@ -79,7 +92,7 @@ def create_app(service: RAGStack | None = None) -> FastAPI:
             log.exception("index failed")
             raise HTTPException(500, str(e)) from e
 
-    @app.post("/api/crawl")
+    @app.post("/api/crawl", dependencies=guarded)
     def crawl(req: CrawlRequest) -> dict[str, Any]:
         try:
             stats = svc.ingest_url(req.url, depth=req.depth, max_pages=req.max_pages)
@@ -88,7 +101,7 @@ def create_app(service: RAGStack | None = None) -> FastAPI:
             log.exception("crawl failed")
             raise HTTPException(500, str(e)) from e
 
-    @app.post("/api/query")
+    @app.post("/api/query", dependencies=guarded)
     def query(req: QueryRequest) -> StreamingResponse:
         def sse():
             try:

@@ -137,4 +137,4 @@ class TestModeRouting:
         assert {t["function"]["name"] for t in tools_for_mode("sql")} == {"sql_query", "search_chunks"}
         assert "graph_search" in [t["function"]["name"] for t in tools_for_mode("graph")]
         all_names = {t["function"]["name"] for t in tools_for_mode("auto")}
-        assert len(all_names) == 9
+        assert len(all_names) == 10
