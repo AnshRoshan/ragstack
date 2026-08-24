@@ -39,6 +39,15 @@ AGENTIC_MODES = {"auto", "agentic", "sql"}
 DIRECT_MODES = {"vector", "lexical", "hybrid", "graph", "global"}
 ALL_MODES = AGENTIC_MODES | DIRECT_MODES
 
+_VERDICT_BASE = {"correct": 0.85, "ambiguous": 0.6, "incorrect": 0.3}
+
+
+def _confidence(verdict: str | None, n_citations: int) -> float:
+    """Calibrated-ish answer confidence from evidence grade + citation coverage."""
+    base = _VERDICT_BASE.get(verdict, 0.5 if verdict is None else 0.3)
+    bump = min(n_citations, 4) * 0.03
+    return round(min(0.97, max(0.05, base + bump)), 2)
+
 MODE_CATALOG = [
     {
         "id": "auto",
@@ -287,10 +296,12 @@ class RAGStack:
             hit = cache.lookup(search_query, mode=mode)
             if hit:
                 yield {"type": "start", "mode": mode, "tools": [], "cached": True}
+                hit.setdefault("confidence", 0.75)  # cached answers: moderate confidence
                 yield {"type": "done", **hit, "error": None}
                 self._remember(session_id, question, hit.get("answer", ""))
                 return
 
+        ctx = None
         final_event: dict[str, Any] | None = None
         if mode in DIRECT_MODES:
             for event in self._stream_direct(question, mode, top_k, search_query, history):
@@ -301,11 +312,17 @@ class RAGStack:
             ctx = self._tool_context(top_k)
             runner = AgentRunner(self.llm, ctx)
             for event in runner.run(
-                question, mode=mode, stream=True, history=history, search_query=search_query
+                question, mode=mode, stream=True, history=history, search_query=search_query, vertical=self.cfg.vertical
             ):
                 if event["type"] == "done":
                     final_event = event
                 yield event
+
+        if isinstance(final_event, dict) and final_event.get("type") == "done":
+            if "confidence" not in final_event:  # direct paths set their own
+                verdict = ctx.last_verdict if ctx is not None else None
+                n_cites = len(final_event.get("citations") or [])
+                final_event["confidence"] = _confidence(verdict, n_cites)
 
         if cache is not None and final_event and not final_event.get("error") and final_event.get("answer"):
             cache.store(
@@ -373,11 +390,20 @@ class RAGStack:
         registry = ToolContext()
         refs = [registry.register(it) for it in items]
         citations = list(registry.citations.values())
+
+        verdict = None
+        grader_ctx = self._tool_context(top_k)
+        if grader_ctx.grader is not None:
+            try:
+                verdict = grader_ctx.grader.grade(search_query or question, items)["action"]
+            except Exception:
+                verdict = None
         yield {
             "type": "retrieval",
             "count": len(items),
             "refs": refs,
             "sub_queries": [],
+            "verdict": verdict,
         }
 
         context_blocks = [
@@ -391,9 +417,17 @@ class RAGStack:
             from .memory import format_history
 
             history_block = f"\n\nRECENT CONVERSATION (for continuity, do not cite):\n{format_history(history)}"
+        vertical_block = ""
+        if self.cfg.vertical:
+            from .agent.prompts import VERTICAL_APPENDIX
+
+            appendix = VERTICAL_APPENDIX.get(self.cfg.vertical)
+            if appendix:
+                vertical_block = f"\n\n{appendix}"
         synthesis = (
             f"Answer the QUESTION using ONLY the CONTEXT. End every claim with its [Sn] citation. "
-            f"If the context does not contain the answer, say exactly what is missing.\n\n"
+            f"If the context does not contain the answer, say exactly what is missing."
+            f"{vertical_block}\n\n"
             f"QUESTION: {question}{history_block}\n\nCONTEXT:\n{context_text}"
         )
         answer_parts: list[str] = []
@@ -419,6 +453,7 @@ class RAGStack:
             "citations": [asdict(c) for c in citations],
             "steps": steps,
             "error": error,
+            "confidence": _confidence(verdict, len(citations)) if not error else 0.05,
         }
 
     def query(

@@ -1,4 +1,4 @@
-"""Reranker providers."""
+﻿"""Reranker providers."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class CrossEncoderReranker(Reranker):
         if self._model is None:
             from sentence_transformers import CrossEncoder
 
-            log.info("loading reranker %s …", self.model_name)
+            log.info("loading reranker %s â€¦", self.model_name)
             self._model = CrossEncoder(self.model_name, max_length=512)
 
     def rerank(self, query: str, items: list[Any], text_key: str = "text") -> list[Any]:
@@ -49,9 +49,47 @@ class CrossEncoderReranker(Reranker):
         return [it for it, _ in ranked]
 
 
+class CohereReranker(Reranker):
+    """Cohere Rerank API (v2). Requires COHERE_API_KEY; uses httpx (no extra dep)."""
+
+    name = "cohere"
+    _API = "https://api.cohere.com/v2/rerank"
+
+    def __init__(self, model_name: str, api_key_env: str = "COHERE_API_KEY"):
+        import os
+
+        self.model_name = model_name
+        self.api_key = os.environ.get(api_key_env)
+        if not self.api_key:
+            raise ValueError(f"missing {api_key_env} for cohere reranker")
+
+    def rerank(self, query: str, items: list[Any], text_key: str = "text") -> list[Any]:
+        if not items:
+            return items
+        import httpx
+
+        resp = httpx.post(
+            self._API,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model_name,
+                "query": query,
+                "documents": [getattr(it, text_key)[:4000] for it in items],
+                "top_n": len(items),
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        scored = sorted(results, key=lambda r: r["relevance_score"], reverse=True)
+        return [items[r["index"]] for r in scored]
+
+
 def make_reranker(provider: str, model: str) -> Reranker:
     if provider in ("none", "noop"):
         return NoopReranker()
     if provider == "cross-encoder":
         return CrossEncoderReranker(model)
+    if provider == "cohere":
+        return CohereReranker(model or "rerank-v3.5")
     raise ValueError(f"unknown reranker provider: {provider}")

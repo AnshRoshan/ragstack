@@ -85,8 +85,38 @@ class ServerConfig(BaseModel):
     auth_token: str | None = None  # when set, mutating endpoints require Bearer auth
 
 
+VERTICAL_PRESETS: dict[str, dict] = {
+    # domain-tuned defaults; override anything in ragstack.yaml afterwards
+    "legal": {
+        "chunking": {"size": 384, "overlap": 48, "min_size": 60},
+        "prompt_appendix": (
+            "DOMAIN: legal documents. Quote operative clause language verbatim when it matters. "
+            "Cite section numbers, statute identifiers and defined terms exactly as written. "
+            "Distinguish binding text from recitals and commentary."
+        ),
+    },
+    "medical": {
+        "chunking": {"size": 512, "overlap": 96, "min_size": 80},
+        "prompt_appendix": (
+            "DOMAIN: medical research. Always surface population, intervention and dosage details "
+            "when present. Flag uncertainty and study limitations explicitly. Never merge findings "
+            "from different studies without attribution."
+        ),
+    },
+    "academic": {
+        "chunking": {"size": 640, "overlap": 96, "min_size": 80},
+        "prompt_appendix": (
+            "DOMAIN: academic papers. Preserve author-year attribution for every claim. "
+            "Distinguish established results from hypotheses and from the authors' speculation. "
+            "Note dataset and methodology names exactly."
+        ),
+    },
+}
+
+
 class AppConfig(BaseModel):
     mode: str = "hybrid"
+    vertical: str | None = None  # legal | medical | academic — applies domain presets
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     rerank: RerankConfig = Field(default_factory=RerankConfig)
@@ -174,6 +204,15 @@ class AppConfig(BaseModel):
 
         out = self.model_copy()
         out.embedding, out.llm, out.rerank = emb, llm, rr
+
+        if self.vertical:
+            if self.vertical not in VERTICAL_PRESETS:
+                raise ConfigError(
+                    f"unknown vertical {self.vertical!r}; valid: {sorted(VERTICAL_PRESETS)}"
+                )
+            preset = VERTICAL_PRESETS[self.vertical]
+            out.chunking = out.chunking.model_copy(update=preset["chunking"])
+
         return out
 
 

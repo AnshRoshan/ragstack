@@ -181,6 +181,7 @@ class ToolContext:
     max_steps: int = 8
     strip_refinement: bool = True
     citations: dict[str, Citation] = field(default_factory=dict)
+    last_verdict: str | None = None
     _counter: int = 0
 
     def register(self, item: RetrievedItem) -> str:

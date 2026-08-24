@@ -1,4 +1,4 @@
-"""Agentic runner: ReAct-style iterative tool-calling loop with streaming events.
+﻿"""Agentic runner: ReAct-style iterative tool-calling loop with streaming events.
 
 Design notes (informed by current agentic-RAG practice):
 - Hard step budget; on the FINAL step tools are withheld so the model must
@@ -18,7 +18,7 @@ from typing import Any
 from ..errors import ProviderError
 from ..types import Answer, Citation, ToolCall
 from ..utils import get_logger, truncate
-from .prompts import SYSTEM_PROMPT
+from .prompts import build_system_prompt
 from .tools import RETRIEVAL_TOOLS, ToolContext, make_executor, tools_for_mode
 
 log = get_logger("ragstack.agent")
@@ -52,6 +52,7 @@ class AgentRunner:
                     ]
                     query_text = call.arguments.get("query") or call.arguments.get("question") or ""
                     verdict = self.ctx.grader.grade(query_text, items)
+                    self.ctx.last_verdict = verdict["action"]
                     if verdict["action"] == "correct" and self.ctx.strip_refinement:
                         refined = self.ctx.grader.refine(query_text, items)
                         if refined and len(refined) != len(items):
@@ -75,9 +76,11 @@ class AgentRunner:
         stream: bool = True,
         history: list[dict] | None = None,
         search_query: str | None = None,
+        vertical: str | None = None,
     ) -> Iterator[dict[str, Any]]:
+
         all_tools = tools_for_mode(mode)
-        messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages: list[dict] = [{"role": "system", "content": build_system_prompt(vertical)}]
         for turn in history or []:
             messages.append({"role": turn["role"], "content": turn["content"]})
         user_content = question

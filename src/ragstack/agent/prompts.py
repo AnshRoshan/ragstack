@@ -27,3 +27,26 @@ CITATION RULES
 STYLE
 - Lead with the direct answer, then supporting detail. Be concise but complete.
 - Use markdown: short paragraphs, bullet lists for enumerations, `code` formatting for identifiers."""
+
+VERTICAL_APPENDIX: dict[str, str] = {
+    "legal": (
+        "DOMAIN: legal documents. Quote operative clause language verbatim when it matters. "
+        "Cite section numbers, statute identifiers and defined terms exactly as written. "
+        "Distinguish binding text from recitals and commentary."
+    ),
+    "medical": (
+        "DOMAIN: medical research. Always surface population, intervention and dosage details "
+        "when present. Flag uncertainty and study limitations explicitly. Never merge findings "
+        "from different studies without attribution."
+    ),
+    "academic": (
+        "DOMAIN: academic papers. Preserve author-year attribution for every claim. "
+        "Distinguish established results from hypotheses and from the authors' speculation. "
+        "Note dataset and methodology names exactly."
+    ),
+}
+
+
+def build_system_prompt(vertical: str | None = None) -> str:
+    appendix = VERTICAL_APPENDIX.get(vertical or "")
+    return f"{SYSTEM_PROMPT}\n\n{appendix}" if appendix else SYSTEM_PROMPT
