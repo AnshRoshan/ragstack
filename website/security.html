@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security &amp; trust — RAGStack</title>
+<meta name="description" content="How RAGStack earns trust: CRAG evidence grading, atomic-claim verification, abstention policy, injection defense and audit traces.">
+<meta name="theme-color" content="#ece7da">
+<script>document.documentElement.setAttribute('data-theme',localStorage.getItem('ragstack-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="security">
+
+<nav><div class="container nav-in">
+  <a class="brand" href="index.html">RAG<em>Stack</em></a>
+  <div class="nav-links">
+    <a href="architecture.html">Architecture</a>
+    <a href="components.html">Components</a>
+    <a href="guide.html">Guide</a>
+    <a href="security.html" class="active">Security &amp; trust</a>
+    <a href="benchmarks.html">Evaluation</a>
+    <button id="themeToggle" aria-label="Toggle light or dark theme">
+      <svg class="ic-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 14.2A8.5 8.5 0 1 1 9.8 3.6a7 7 0 0 0 10.6 10.6z"/></svg>
+      <svg class="ic-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <a class="nav-cta" href="guide.html">Get started</a>
+  </div>
+</div></nav>
+
+<div class="page-head"><div class="container">
+  <div class="crumbs"><a href="index.html">RAGStack</a> / Security &amp; trust</div>
+  <h1>The corpus is an<br>untrusted input surface.</h1>
+  <p class="lede">Everything below treats retrieved content as data to reason about — never as instructions — and treats the generator as fallible: every claim it makes gets checked before you see it.</p>
+</div></div>
+
+<div class="container with-toc"><div>
+
+<section class="block" id="grading">
+  <div class="sec-head"><h2>Evidence grading (CRAG)</h2><span class="sec-ref">S1 · GRADE</span></div>
+  <p class="body">After every retrieval in the agentic loop, results are graded <b>correct / ambiguous / incorrect</b> against the query — by a cross-encoder score heuristic by default, or an LLM judge with <code>evidence_grader: llm</code>. "Incorrect" does not fail silently: the agent receives a corrective hint to change keywords or switch tools instead of forcing an answer from bad evidence.</p>
+</section>
+
+<section class="block" id="strips">
+  <div class="sec-head"><h2>Knowledge-strip refinement</h2><span class="sec-ref">S2 · REFINE</span></div>
+  <p class="body">Graded-correct evidence is split into sentence strips; a reranker keeps only strips relevant to the query. A 500-token paragraph that supports one sentence becomes that sentence plus its neighbors — fewer noise tokens reach the generator, and citations still point at the original chunk.</p>
+</section>
+
+<section class="block" id="verification">
+  <div class="sec-head"><h2>Atomic-claim verification</h2><span class="sec-ref">S3 · VERIFY</span></div>
+  <p class="body">After generation the answer is decomposed into atomic claims. Each claim is checked against the evidence it cites and receives a verdict — <b>supported</b>, <b>partial</b>, <b>unsupported</b> — plus per-claim confidence. The result is attached to the response as a machine-readable manifest:</p>
+  <pre class="inline">{
+  "claims": [
+    { "claim": "The vector store is LanceDB.",
+      "refs": ["S1"], "verdict": "supported",
+      "confidence": 0.9, "reason": "stated verbatim" } ],
+  "supported_ratio": 1.0
+}</pre>
+  <p class="body">Answer confidence blends this support ratio with the retrieval-side evidence grade, so a fluent answer built on irrelevant sources cannot score well.</p>
+</section>
+
+<section class="block" id="abstention">
+  <div class="sec-head"><h2>Abstention policy</h2><span class="sec-ref">S4 · ABSTAIN</span></div>
+  <p class="body">When supported-ratio falls below <code>generation.abstain_threshold</code> (default 0.5), RAGStack withholds the draft answer and returns an explicit insufficiency notice — the retrieved sources stay listed so you can judge them yourself. Confidence is capped at 0.25 on abstained responses. Disable with <code>verify_answers: false</code>; tune via threshold.</p>
+</section>
+
+<section class="block" id="injection">
+  <div class="sec-head"><h2>Prompt-injection defense</h2><span class="sec-ref">S5 · INJECTION</span></div>
+  <p class="body">Documents can contain instructions ("ignore previous instructions…"). The agent's system prompt hard-codes the boundary: tool output is <b>data to reason about</b>, never instructions to execute. The agent is told it may report an injection attempt rather than comply, must never reveal system internals, and must prefer abstaining over following embedded directives. SQL access is additionally fenced to single read-only SELECT statements with keyword blocking and row caps.</p>
+</section>
+
+<section class="block" id="traces">
+  <div class="sec-head"><h2>Audit traces</h2><span class="sec-ref">S6 · TRACES</span></div>
+  <p class="body">Each query persists one JSON trace: route + classification, every tool call with arguments, verification manifest, citations and final answer. Traces live in <code>.ragstack/traces/</code>, bounded to the most recent 200 (configurable), disabled entirely with <code>trace_enabled: false</code>. This is an evidence trail — not exposed chain-of-thought.</p>
+</section>
+
+<section class="block" id="roadmap">
+  <div class="sec-head"><h2>Honest roadmap</h2><span class="sec-ref">S7 · NEXT</span></div>
+  <table class="ref">
+    <tr><th>Control</th><th>Status</th></tr>
+    <tr><td><p>Evidence grading, strip refinement, claim verification, abstention</p></td><td><span class="chip shipped">shipped</span></td></tr>
+    <tr><td><p>Injection-hardened prompting, SQL fencing, audit traces</p></td><td><span class="chip shipped">shipped</span></td></tr>
+    <tr><td><p>Bearer-token API auth with loopback bypass</p></td><td><span class="chip shipped">shipped</span></td></tr>
+    <tr><td><p>Per-document ACLs enforced during retrieval</p></td><td><span class="chip roadmap">roadmap</span></td></tr>
+    <tr><td><p>Document versioning: effective dates, supersession chains</p></td><td><span class="chip roadmap">roadmap</span></td></tr>
+    <tr><td><p>Ingestion malware scanning &amp; content quarantine</p></td><td><span class="chip roadmap">roadmap</span></td></tr>
+    <tr><td><p>Calibrated confidence against held-out domain data (Brier/ECE)</p></td><td><span class="chip roadmap">roadmap</span></td></tr>
+  </table>
+</section>
+
+</div>
+
+<aside class="toc">
+  <div class="t">On this page</div>
+  <a href="#grading">Evidence grading</a>
+  <a href="#strips">Strip refinement</a>
+  <a href="#verification">Claim verification</a>
+  <a href="#abstention">Abstention</a>
+  <a href="#injection">Injection defense</a>
+  <a href="#traces">Audit traces</a>
+  <a href="#roadmap">Roadmap</a>
+</aside>
+</div>
+
+<div class="container pagenav">
+  <a href="guide.html"><span class="dir">← Previous</span><span class="pt">Usage guide</span></a>
+  <a class="next" href="benchmarks.html"><span class="dir">Next →</span><span class="pt">Evaluation</span></a>
+</div>
+
+<footer><div class="container foot-in">
+  <div>RAGSTACK · HYBRID AGENTIC RAG · © 2026 ANSH ROSHAN · MIT</div>
+  <div><a href="architecture.html">ARCHITECTURE</a> · <a href="guide.html">GUIDE</a> · <a href="https://github.com/AnshRoshan/ragstack">SOURCE</a></div>
+</div></footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

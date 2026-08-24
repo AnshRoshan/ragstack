@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a capability improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What question or workflow fails today? Real queries beat abstract needs.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: checkboxes
+    id: eval
+    attributes:
+      label: Evaluation plan
+      description: RAGStack requires that components earn their place. How would you measure this helps?
+      options:
+        - label: I can add a golden-set case that fails today and passes with this change

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Components — RAGStack</title>
+<meta name="description" content="Every RAGStack component explained: ingestion, stores, graph engine, agent tools, verification, caches and interfaces.">
+<meta name="theme-color" content="#ece7da">
+<script>document.documentElement.setAttribute('data-theme',localStorage.getItem('ragstack-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="components">
+
+<nav><div class="container nav-in">
+  <a class="brand" href="index.html">RAG<em>Stack</em></a>
+  <div class="nav-links">
+    <a href="architecture.html">Architecture</a>
+    <a href="components.html" class="active">Components</a>
+    <a href="guide.html">Guide</a>
+    <a href="security.html">Security &amp; trust</a>
+    <a href="benchmarks.html">Evaluation</a>
+    <button id="themeToggle" aria-label="Toggle light or dark theme">
+      <svg class="ic-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 14.2A8.5 8.5 0 1 1 9.8 3.6a7 7 0 0 0 10.6 10.6z"/></svg>
+      <svg class="ic-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <a class="nav-cta" href="guide.html">Get started</a>
+  </div>
+</div></nav>
+
+<div class="page-head"><div class="container">
+  <div class="crumbs"><a href="index.html">RAGStack</a> / Components</div>
+  <h1>Every part, in plain English.</h1>
+  <p class="lede">Where each module lives, what it does, and the knobs you can turn. File paths are relative to <code>src/ragstack/</code>.</p>
+</div></div>
+
+<div class="container with-toc"><div>
+
+<section class="block" id="ingestion">
+  <div class="sec-head"><h2>Ingestion</h2><span class="sec-ref">ingestion/</span></div>
+  <table class="ref">
+    <tr><th>Component</th><th>What it does</th></tr>
+    <tr><td><code>parsers.py</code></td><td><p>File → Document. Docling for PDF/DOCX/PPTX/XLSX/images (layout + OCR); native readers for MD/TXT/code/CSV; trafilatura for HTML. Skips junk dirs (<code>.git</code>, <code>node_modules</code>…), oversized files, duplicate paths.</p></td></tr>
+    <tr><td><code>chunker.py</code></td><td><p>Structure-aware splitting: heading paths carried per chunk, code fences kept whole, token budgets with sentence-level overlap, small chunks merged under a size cap.</p></td></tr>
+    <tr><td><code>enricher.py</code></td><td><p>Optional contextual retrieval: one LLM sentence situating each chunk, prepended before indexing. Threaded, JSONL-cached by fingerprint — re-indexing costs nothing.</p></td></tr>
+    <tr><td><code>crawler.py</code></td><td><p>Same-domain crawler: robots.txt respected, delay between fetches, depth/page caps, main-content extraction.</p></td></tr>
+  </table>
+</section>
+
+<section class="block" id="stores">
+  <div class="sec-head"><h2>Stores</h2><span class="sec-ref">stores/</span></div>
+  <table class="ref">
+    <tr><th>Store</th><th>What it holds</th></tr>
+    <tr><td><code>lexical.py</code></td><td><p>tantivy BM25 index over whole pages (kind=<code>page</code>) and chunks (kind=<code>chunk</code>). Query sanitization with graceful fallbacks; delete-by-document for re-indexing.</p></td></tr>
+    <tr><td><code>vector.py</code></td><td><p>LanceDB fixed-size float32 vectors plus text/metadata. Dimension pinned via meta file — switching embedding models without resetting fails loudly instead of silently corrupting search.</p></td></tr>
+    <tr><td><code>graph/sqlite_graph.py</code></td><td><p>Embedded default graph: entities keyed by (normalized name, type), weighted relation rows with chunk provenance, extraction cache table, communities table. WAL mode, thread-locked.</p></td></tr>
+    <tr><td><code>graph/neo4j_graph.py</code></td><td><p>Drop-in Neo4j backend: same interface, MERGE-based upserts, constraint + index bootstrap. Enable with one config line.</p></td></tr>
+    <tr><td><code>sql_catalog.py</code></td><td><p>Registered databases → SQLAlchemy engines (cached). Schema introspection feeds the agent's prompts; queries are hard-guarded to SELECT/WITH/EXPLAIN with row caps.</p></td></tr>
+  </table>
+</section>
+
+<section class="block" id="graphrag">
+  <div class="sec-head"><h2>GraphRAG engine</h2><span class="sec-ref">graphrag/</span></div>
+  <table class="ref">
+    <tr><th>Module</th><th>Role</th></tr>
+    <tr><td><code>extract.py</code></td><td><p>Per-chunk LLM extraction of typed entities + relationships as strict JSON; aggressive normalization (unknown types → <i>other</i>, dangling relations dropped); cached per chunk fingerprint so interrupted indexing resumes.</p></td></tr>
+    <tr><td><code>communities.py</code></td><td><p>Builds a NetworkX graph from aggregated relation weights, runs Louvain clustering, writes an LLM summary + keywords per community back into the store.</p></td></tr>
+    <tr><td><code>search.py</code></td><td><p><b>Local:</b> seed entities matched by name tokens, walk up to max_hops, return entities + relations + their source chunks. <b>Global:</b> rank community summaries by keyword overlap, map-reduce synthesize.</p></td></tr>
+  </table>
+</section>
+
+<section class="block" id="retrieval">
+  <div class="sec-head"><h2>Retrieval &amp; quality layer</h2><span class="sec-ref">retrieval/ · cache.py · memory.py</span></div>
+  <table class="ref">
+    <tr><th>Module</th><th>Role</th></tr>
+    <tr><td><code>retrieval/vector_rag.py</code></td><td><p>Dense search, hybrid search (RRF fusion of dense + BM25) and reciprocal-rank fusion itself. Reranking hooks after both single-leg and fused passes.</p></td></tr>
+    <tr><td><code>retrieval/lexical_rag.py</code></td><td><p>BM25 helpers over pages and chunks with optional reranking.</p></td></tr>
+    <tr><td><code>retrieval/evaluator.py</code></td><td><p>CRAG evidence grader (heuristic or LLM judge) returning correct / ambiguous / incorrect with corrective hints; knowledge-strip refinement keeps only query-relevant sentences from graded evidence.</p></td></tr>
+    <tr><td><code>cache.py</code></td><td><p>Semantic response cache in LanceDB. Cosine threshold 0.95, tightened to 0.98 when questions contain uncertainty markers ("maybe", "possibly"). Bypass with <code>--no-cache</code>.</p></td></tr>
+    <tr><td><code>memory.py</code></td><td><p>SQLite conversation turns per session + co-reference query rewriting ("and its pricing?" → standalone query). RecallStore embeds answered Q&amp;A for cross-session reuse.</p></td></tr>
+  </table>
+</section>
+
+<section class="block" id="agent">
+  <div class="sec-head"><h2>The agent &amp; its eleven tools</h2><span class="sec-ref">agent/</span></div>
+  <p class="body"><code>runner.py</code> executes the bounded ReAct loop and streams typed events (<code>start</code>, <code>route</code>, <code>rewrite</code>, <code>thought</code>, <code>tool_start/end</code>, <code>verification</code>, <code>answer</code>, <code>error</code>, <code>done</code>). <code>planner.py</code> decomposes compound questions into parallel sub-searches. <code>verifier.py</code> produces the claim manifest and abstention decision.</p>
+  <table class="ref">
+    <tr><th>Tool</th><th>Purpose</th></tr>
+    <tr><td><code>hybrid_search</code></td><td><p>Fused dense+keyword search, reranked — the default first move.</p></td></tr>
+    <tr><td><code>decomposed_search</code></td><td><p>Splits compound questions, searches parts in parallel, fuses results.</p></td></tr>
+    <tr><td><code>search_chunks</code> · <code>search_pages</code></td><td><p>Pure BM25 over chunks / whole pages — exact terms and identifiers.</p></td></tr>
+    <tr><td><code>semantic_search</code></td><td><p>Dense-only meaning search.</p></td></tr>
+    <tr><td><code>graph_search</code></td><td><p>Entity neighborhood walk with linked source chunks.</p></td></tr>
+    <tr><td><code>community_overview</code></td><td><p>Corpus-wide thematic synthesis from community summaries.</p></td></tr>
+    <tr><td><code>recall_memory</code></td><td><p>Semantic search over past answered questions.</p></td></tr>
+    <tr><td><code>find_contradicting_evidence</code></td><td><p>Negation-probed search surfacing passages that may conflict with a claim.</p></td></tr>
+    <tr><td><code>sql_query</code></td><td><p>Read-only SELECT against registered databases.</p></td></tr>
+    <tr><td><code>fetch_url</code></td><td><p>Live page extraction (only when explicitly requested).</p></td></tr>
+  </table>
+  <div class="callout warn"><b>Mode scoping:</b> tools are subsets per mode — e.g. <code>sql</code> exposes only sql_query + search_chunks; <code>graph</code> exposes graph + community + semantic. <code>auto</code>/<code>agentic</code> expose all eleven.</div>
+</section>
+
+<section class="block" id="interfaces">
+  <div class="sec-head"><h2>Interfaces &amp; operations</h2><span class="sec-ref">web/ · cli.py · eval/</span></div>
+  <table class="ref">
+    <tr><th>Module</th><th>Role</th></tr>
+    <tr><td><code>web/app.py</code></td><td><p>FastAPI: SSE streaming on POST /api/query; /api/index, /api/crawl, /api/status, /api/modes; CORS for the hosted site; optional bearer auth on mutating routes.</p></td></tr>
+    <tr><td><code>cli.py</code></td><td><p>Typer app: index, crawl, query, watch, serve, modes, status, sessions, forget, db, eval, bench, reset.</p></td></tr>
+    <tr><td><code>eval/harness.py</code></td><td><p>Golden-set runner: hit@k, MRR, keyword pass-rate, LLM-judged faithfulness.</p></td></tr>
+    <tr><td><code>eval/bench.py</code></td><td><p>Deterministic synthetic corpus generator behind <code>ragstack bench</code>.</p></td></tr>
+  </table>
+</section>
+
+</div>
+
+<aside class="toc">
+  <div class="t">On this page</div>
+  <a href="#ingestion">Ingestion</a>
+  <a href="#stores">Stores</a>
+  <a href="#graphrag">GraphRAG engine</a>
+  <a href="#retrieval">Retrieval &amp; quality</a>
+  <a href="#agent">Agent &amp; tools</a>
+  <a href="#interfaces">Interfaces</a>
+</aside>
+</div>
+
+<div class="container pagenav">
+  <a href="architecture.html"><span class="dir">← Previous</span><span class="pt">Architecture</span></a>
+  <a class="next" href="guide.html"><span class="dir">Next →</span><span class="pt">Usage guide</span></a>
+</div>
+
+<footer><div class="container foot-in">
+  <div>RAGSTACK · HYBRID AGENTIC RAG · © 2026 ANSH ROSHAN · MIT</div>
+  <div><a href="architecture.html">ARCHITECTURE</a> · <a href="guide.html">GUIDE</a> · <a href="https://github.com/AnshRoshan/ragstack">SOURCE</a></div>
+</div></footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>
