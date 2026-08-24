@@ -18,6 +18,8 @@ def _client(tmp_path: Path) -> TestClient:
     cfg = AppConfig(mode="local")
     cfg.index.root = str(tmp_path / "idx")
     cfg.graph.enabled = False
+    cfg.agent.query_intelligence = False
+    cfg.generation.verify_answers = False
     svc = RAGStack(cfg)
     svc._embeddings = FakeEmbeddings()
     svc._llm = FakeLLM([{"content": "Final answer [S1]."}])

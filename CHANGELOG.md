@@ -1,4 +1,14 @@
-﻿# Changelog
+# Changelog
+
+## 0.6.0 - 2026-08-24
+
+Frontier pass: adaptive query intelligence (classify -> route across
+no-retrieval/clarify/direct pipelines/agentic; dynamic top-k); atomic-claim
+verification with per-claim verdicts, evidence manifests and abstention policy;
+find_contradicting_evidence tool (11 tools total); injection-hardened agent
+prompting; per-query audit traces persisted under .ragstack/traces with
+bounded retention; website trust-layer content + refreshed stats.
+
 
 ## 0.5.0 - 2026-08-23
 

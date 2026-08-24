@@ -93,6 +93,18 @@ TOOL_SCHEMAS: list[dict] = [
     {
         "type": "function",
         "function": {
+            "name": "find_contradicting_evidence",
+            "description": "Search the corpus for evidence that contradicts or disagrees with a given claim. Returns candidate passages; judge conflicts yourself and present both sides when they genuinely conflict.",
+            "parameters": {
+                "type": "object",
+                "properties": {"claim": {"type": "string"}},
+                "required": ["claim"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "recall_memory",
             "description": "Search past conversations with this user: earlier questions you already answered, with their answers. Use when the question might have been asked before or builds on an earlier answer.",
             "parameters": {
@@ -268,6 +280,23 @@ def make_executor(ctx: ToolContext) -> Callable[[str, dict], str]:
                 context, items = global_search(ctx.graph_store, ctx.llm, args["topic"], int(args.get("top_k", 4)))
                 refs = [ctx.register(i) for i in items]
                 return f"{context}\n\nCOMMUNITY REFS: {refs}"
+
+            if name == "find_contradicting_evidence":
+                claim = str(args.get("claim", "")).strip()
+                if not claim:
+                    return json.dumps({"error": "claim required"})
+                candidates: list[RetrievedItem] = []
+                seen_ids: set[str] = set()
+                for probe in (f"evidence against {claim}", f"{claim} is incorrect", claim):
+                    try:
+                        found = semantic_search(ctx.embeddings, ctx.vector_store, probe, top_k=6)
+                    except Exception:
+                        found = []
+                    for it in found:
+                        if it.chunk_id not in seen_ids:
+                            seen_ids.add(it.chunk_id)
+                            candidates.append(it)
+                return _format_hits(ctx, candidates, limit=10)
 
             if name == "recall_memory":
                 if ctx.recall_store is None:

@@ -16,6 +16,8 @@ def _svc(tmp_path: Path) -> RAGStack:
     cfg.index.root = str(tmp_path / "idx")
     cfg.graph.enabled = True
     cfg.graph.backend = "sqlite"
+    cfg.agent.query_intelligence = False
+    cfg.generation.verify_answers = False
     svc = RAGStack(cfg)
     svc._embeddings = FakeEmbeddings()
     svc._llm = FakeLLM([{"content": "Synthesized answer [S1]."}])
@@ -48,7 +50,7 @@ class TestDirectPipelines:
         svc = _svc(tmp_path)
         answer = svc.query("what orchestrates containers?", mode="vector")
         assert "[S1]" in answer.text or "Synthesized" in answer.text
-        assert len(svc._llm.calls) == 1  # exactly one synthesis call â€” no agent loop
+        assert len(svc._llm.calls) == 1  # exactly one synthesis call Ã¢â,¬â€ no agent loop
         assert answer.citations
 
     def test_lexical_mode(self, tmp_path):
@@ -101,7 +103,7 @@ class TestAgenticDispatch:
         svc._llm = FakeLLM([{"content": "Direct answer."}])
         events = list(svc.stream_query("q", mode="auto"))
         start = events[0]
-        assert start["type"] == "start" and len(start["tools"]) == 10
+        assert start["type"] == "start" and len(start["tools"]) == 11
 
 
 class TestModesEndpoint:

@@ -67,6 +67,7 @@ class AgentConfig(BaseModel):
     strip_refinement: bool = True  # keep only query-relevant sentences from graded evidence
     memory_turns: int = 3  # conversation turns remembered per session (0 disables memory)
     recall_enabled: bool = True  # past Q&A becomes retrievable via the recall_memory tool
+    query_intelligence: bool = True  # adaptive routing: classify before retrieval (mode=auto)
 
 
 class CacheConfig(BaseModel):
@@ -77,6 +78,13 @@ class CacheConfig(BaseModel):
 
 class IndexConfig(BaseModel):
     root: str = ".ragstack"
+
+
+class GenerationConfig(BaseModel):
+    verify_answers: bool = True  # atomic-claim verification pass after generation
+    abstain_threshold: float = 0.5  # supported_ratio below this -> abstain instead of guessing
+    trace_enabled: bool = True
+    trace_keep: int = 200  # number of trace files retained
 
 
 class ServerConfig(BaseModel):
@@ -124,6 +132,7 @@ class AppConfig(BaseModel):
     graph: GraphConfig = Field(default_factory=GraphConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
+    generation: GenerationConfig = Field(default_factory=GenerationConfig)
     databases: dict[str, str] = Field(default_factory=dict)
     index: IndexConfig = Field(default_factory=IndexConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)

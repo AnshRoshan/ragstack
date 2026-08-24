@@ -85,4 +85,7 @@ def app_config(tmp_path):
     cfg = AppConfig(mode="local")
     cfg.index.root = str(tmp_path / "idx")
     cfg.graph.enabled = False
+    # keep legacy scripted-LLM flows deterministic: frontier tests opt in explicitly
+    cfg.agent.query_intelligence = False
+    cfg.generation.verify_answers = False
     return cfg

@@ -225,8 +225,8 @@ footer a:hover{color:var(--ink);border-color:var(--ink)}
     </div>
     <div class="tblock" role="img" aria-label="Specification summary">
       <div class="tb"><div class="k">Retrieval paradigms</div><div class="v">04</div></div>
-      <div class="tb"><div class="k">Agent tools</div><div class="v">09</div></div>
-      <div class="tb"><div class="k">Tests</div><div class="v"><i>78 PASS</i></div></div>
+      <div class="tb"><div class="k">Agent tools</div><div class="v">11</div></div>
+      <div class="tb"><div class="k">Tests</div><div class="v"><i>122 PASS</i></div></div>
       <div class="tb"><div class="k">License · v</div><div class="v">MIT · 0.2.0</div></div>
     </div>
   </div></div>
@@ -332,6 +332,10 @@ footer a:hover{color:var(--ink);border-color:var(--ink)}
     <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg><span><b>Three stack modes</b><span>Fully local (Ollama), hybrid, or full cloud; one config line switches between them.</span></span></div>
     <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg><span><b>Streaming everything</b><span>SSE events for thoughts, tool calls and answers power CLI and web UI alike.</span></span></div>
     <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Built-in evaluation</b><span>Golden-set harness reports hit-rate, MRR and LLM-judged faithfulness.</span></span></div>
+    <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/></svg><span><b>Claim-level verification</b><span>Every answer is split into atomic claims, checked against its citations, and withheld if support falls below threshold.</span></span></div>
+    <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><b>Audit traces</b><span>Every query writes a replayable trace: routes taken, tools called, evidence used, verification results.</span></span></div>
+    <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg><span><b>Injection defense</b><span>Retrieved content is treated as data, never instructions; sources cannot hijack the agent.</span></span></div>
+    <div class="feat reveal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 114 4L8 20l-5 1 1-5z"/></svg><span><b>Adaptive routing</b><span>A classifier picks no-retrieval, clarification, structured query, fast pipeline or agentic research per question.</span></span></div>
   </div>
 </div></section>
 
@@ -505,7 +509,7 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 
 /* ============ modes list ============ */
 const MODES=[
- {id:'auto',label:'Auto router',desc:'The agent plans each hop and picks whichever of the nine tools fits.'},
+ {id:'auto',label:'Auto router',desc:'Classifies each question, then picks the minimum sufficient strategy: no retrieval, one fast pipeline, or the full agent.'},
  {id:'agentic',label:'Agentic RAG',desc:'Explicit full multi-hop ReAct loop with evidence grading.'},
  {id:'hybrid',label:'Hybrid fusion',desc:'BM25 + embeddings merged by reciprocal rank fusion, cross-encoder reranked.'},
  {id:'vector',label:'Vector RAG',desc:'Pure meaning-based dense search with reranking.'},

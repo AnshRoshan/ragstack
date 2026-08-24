@@ -11,7 +11,7 @@ Quick start:
     answer = svc.query("What does the spec say about rate limits?")
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "AppConfig",

@@ -266,7 +266,46 @@ class RAGStack:
         top_k: int | None = None,
         use_cache: bool = True,
         session_id: str | None = None,
-    ) -> Iterator[dict[str, Any]]:
+    ):
+        """Public entry: wraps the core stream with a trace id and audit persistence."""
+        import uuid
+
+        trace_id = uuid.uuid4().hex[:16]
+        events: list[dict] = []
+        for event in self._stream_core(question, mode, top_k, use_cache, session_id):
+            if event.get("type") in ("start", "done"):
+                event.setdefault("trace_id", trace_id)
+            events.append(event)
+            yield event
+        self._persist_trace(trace_id, question, events)
+
+    def _persist_trace(self, trace_id: str, question: str, events: list[dict]) -> None:
+        import json as _json
+
+        if not self.cfg.generation.trace_enabled:
+            return
+        try:
+            tdir = self.root / "traces"
+            tdir.mkdir(parents=True, exist_ok=True)
+            payload = {"trace_id": trace_id, "question": question, "events": events}
+            (tdir / f"{trace_id}.json").write_text(
+                _json.dumps(payload, ensure_ascii=False, default=str), encoding="utf-8"
+            )
+            traces = sorted(tdir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+            keep = max(1, self.cfg.generation.trace_keep)
+            for old in traces[:-keep]:
+                old.unlink(missing_ok=True)
+        except Exception as e:
+            log.debug("trace persist failed: %s", e)
+
+    def _stream_core(
+        self,
+        question: str,
+        mode: str = "auto",
+        top_k: int | None = None,
+        use_cache: bool = True,
+        session_id: str | None = None,
+    ):
         mode = (mode or "auto").lower()
         if mode not in ALL_MODES:
             yield {"type": "error", "message": f"unknown mode {mode!r}; valid: {sorted(ALL_MODES)}"}
@@ -291,6 +330,35 @@ class RAGStack:
                 "standalone": search_query,
             }
 
+        # ---- adaptive query intelligence (mode=auto only) ----
+        if mode == "auto" and self.cfg.agent.query_intelligence:
+            from .agent.query_intel import classify, resolve_route
+
+            classification = classify(self.llm, question, list(self.cfg.databases), self.cfg.agent)
+            route, routed_k = resolve_route(classification, requested_mode=None, default_top_k=top_k or self.cfg.agent.top_k)
+            yield {"type": "route", "route": route, "classification": classification}
+            if classification.get("needs_clarification") and classification.get("clarifying_question"):
+                yield {
+                    "type": "clarify",
+                    "question": classification["clarifying_question"],
+                    "message": "Please clarify so I can retrieve the right evidence.",
+                }
+                return
+            if top_k is None:
+                top_k = routed_k
+            if classification.get("intent") == "conversational":
+                # nothing to retrieve; answer conversationally without tools
+                ctx0 = self._tool_context(top_k)
+                runner0 = AgentRunner(self.llm, ctx0)
+                got_final = None
+                for event in runner0.run(question, mode=mode, stream=True, history=history):
+                    if event["type"] == "done":
+                        got_final = event
+                    yield event
+                self._remember(session_id, question, (got_final or {}).get("answer", ""))
+                return
+            mode = route
+
         cache = self.cache if use_cache else None
         if cache is not None:
             hit = cache.lookup(search_query, mode=mode)
@@ -302,11 +370,12 @@ class RAGStack:
                 return
 
         ctx = None
-        final_event: dict[str, Any] | None = None
+        pending_done: dict[str, Any] | None = None
         if mode in DIRECT_MODES:
             for event in self._stream_direct(question, mode, top_k, search_query, history):
                 if event["type"] == "done":
-                    final_event = event
+                    pending_done = event
+                    continue
                 yield event
         else:
             ctx = self._tool_context(top_k)
@@ -315,24 +384,62 @@ class RAGStack:
                 question, mode=mode, stream=True, history=history, search_query=search_query, vertical=self.cfg.vertical
             ):
                 if event["type"] == "done":
-                    final_event = event
+                    pending_done = event
+                    continue
                 yield event
 
-        if isinstance(final_event, dict) and final_event.get("type") == "done":
-            if "confidence" not in final_event:  # direct paths set their own
-                verdict = ctx.last_verdict if ctx is not None else None
-                n_cites = len(final_event.get("citations") or [])
-                final_event["confidence"] = _confidence(verdict, n_cites)
+        if pending_done is None:
+            return
 
-        if cache is not None and final_event and not final_event.get("error") and final_event.get("answer"):
+        # ---- atomic-claim verification + evidence manifest ----
+        if (
+            self.cfg.generation.verify_answers
+            and not pending_done.get("error")
+            and pending_done.get("answer")
+            and pending_done.get("citations")
+        ):
+            try:
+                from .agent.verifier import maybe_abstain, verify_claims
+                from .types import Citation as _Citation
+
+                cites = [_Citation(**c) for c in pending_done["citations"]]
+                manifest = verify_claims(self.llm, pending_done["answer"], cites)
+                if manifest["claims"]:
+                    base = pending_done.get("confidence") or _confidence(
+                        ctx.last_verdict if ctx is not None else None,
+                        len(pending_done["citations"]),
+                    )
+                    ratio = manifest.get("supported_ratio")
+                    confidence = float(base)
+                    if ratio is not None:
+                        confidence = round(0.5 * confidence + 0.5 * ratio, 2)
+                    abstained_answer, abstained = maybe_abstain(
+                        pending_done["answer"], manifest, self.cfg.generation.abstain_threshold
+                    )
+                    if abstained:
+                        pending_done["answer"] = abstained_answer
+                        pending_done["abstained"] = True
+                        confidence = min(confidence, 0.25)
+                    pending_done["confidence"] = confidence
+                    pending_done["manifest"] = manifest
+                    yield {"type": "verification", "manifest": manifest}
+            except Exception as e:
+                log.debug("verification pass skipped (%s)", e)
+
+        if "confidence" not in pending_done:
+            verdict = ctx.last_verdict if ctx is not None else None
+            pending_done["confidence"] = _confidence(verdict, len(pending_done.get("citations") or []))
+        yield pending_done
+
+        if cache is not None and not pending_done.get("error") and pending_done.get("answer"):
             cache.store(
                 search_query,
                 mode,
-                final_event["answer"],
-                final_event.get("citations", []),
-                final_event.get("steps", []),
+                pending_done["answer"],
+                pending_done.get("citations", []),
+                pending_done.get("steps", []),
             )
-        self._remember(session_id, question, final_event.get("answer", "") if final_event else "")
+        self._remember(session_id, question, pending_done.get("answer", ""))
 
     def _remember(self, session_id: str | None, question: str, answer: str) -> None:
         if not session_id or self.memory is None or not answer:
